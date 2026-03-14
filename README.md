@@ -29,7 +29,7 @@
 | Python | 3.11+ | [python.org](https://python.org) |
 | Node.js | 18+ | [nodejs.org](https://nodejs.org) |
 | PostgreSQL | 14+ | [postgresql.org](https://postgresql.org) |
-| Redis | 7+ | Windows: [Memurai](https://www.memurai.com/) or WSL |
+| Docker Desktop | Latest | [docker.com](https://www.docker.com/products/docker-desktop/) — for running Redis |
 | CMake | Latest | `pip install cmake` (needed for dlib/face_recognition) |
 | Visual Studio Build Tools | Latest | [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) — select "Desktop C++" workload |
 
@@ -46,7 +46,23 @@ git clone <your-repo-url>
 cd Deep_Vision
 ```
 
-### Step 2: PostgreSQL Database
+### Step 2: Redis via Docker
+
+Start Redis using Docker (keep this running throughout development):
+
+```bash
+docker run -d --name deep-vision-redis -p 6379:6379 redis:7-alpine
+```
+
+To check if Redis is running:
+
+```bash
+docker ps
+```
+
+> **Note:** After restarting your PC, start Redis again with: `docker start deep-vision-redis`
+
+### Step 3: PostgreSQL Database
 
 Open pgAdmin or psql and run:
 
@@ -57,7 +73,7 @@ ALTER ROLE deepvision_user SET client_encoding TO 'utf8';
 GRANT ALL PRIVILEGES ON DATABASE deep_vision TO deepvision_user;
 ```
 
-### Step 3: Environment File
+### Step 4: Environment File
 
 Copy `.env.example` to `.env` and update values:
 
@@ -88,7 +104,7 @@ FACE_MATCH_THRESHOLD=0.6
 CCTV_FRAME_RATE=1
 ```
 
-### Step 4: Python Virtual Environment
+### Step 5: Python Virtual Environment
 
 ```bash
 python -m venv venv
@@ -102,13 +118,13 @@ pip install -r requirements.txt
 
 > If `dlib` fails, ensure Visual Studio Build Tools with C++ workload is installed, then retry.
 
-### Step 5: Database Migrations
+### Step 6: Database Migrations
 
 ```bash
 python manage.py migrate
 ```
 
-### Step 6: Create Superuser
+### Step 7: Create Superuser
 
 ```bash
 python manage.py createsuperuser
@@ -116,7 +132,7 @@ python manage.py createsuperuser
 
 Use role `ADMIN` when prompted (or update via Django admin later).
 
-### Step 7: Node.js Real-time Server
+### Step 8: Node.js Real-time Server
 
 ```bash
 cd deepvision-realtime
@@ -124,7 +140,7 @@ npm install
 cd ..
 ```
 
-### Step 8: React Dashboard
+### Step 9: React Dashboard
 
 ```bash
 cd deepvision-dashboard
@@ -136,7 +152,15 @@ cd ..
 
 ## ▶️ Running the Project
 
-You need **4 terminals** running simultaneously:
+You need **5 terminals** running simultaneously:
+
+### Terminal 0 — Redis (Docker)
+
+Make sure Redis is running:
+
+```bash
+docker start deep-vision-redis
+```
 
 ### Terminal 1 — Django API Server
 
