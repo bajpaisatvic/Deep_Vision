@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Media uploads (user data)
+media/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Node.js
+node_modules/
+deepvision-dashboard/node_modules/
+deepvision-realtime/node_modules/
+
+# Build output
+deepvision-dashboard/dist/
+staticfiles/
+
+# Database
+*.sqlite3
+
+# Logs
+*.log
+
+# Byte-compiled
+*.pyc
