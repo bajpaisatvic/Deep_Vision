@@ -1,0 +1,76 @@
+# Deep Vision — Django Backend Dockerfile
+# Multi-stage build for optimized production image
+
+# ─── Stage 1: Builder ────────────────────────────────────────
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies (for dlib, face_recognition, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Build wheels
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+# ─── Stage 2: Runtime ───────────────────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 deepvision && \
+    mkdir -p /app/staticfiles /app/media && \
+    chown -R deepvision:deepvision /app
+
+# Copy wheels from builder
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
+
+# Install Python packages from wheels
+RUN pip install --no-cache /wheels/*
+
+# Copy application code
+COPY --chown=deepvision:deepvision . .
+
+# Set environment for headless OpenCV operation
+ENV QT_QPA_PLATFORM=offscreen
+
+# Switch to non-root user
+USER deepvision
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/api/health/', timeout=2)" || exit 1
+
+# Run Gunicorn
+CMD ["gunicorn", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "4", \
+     "--worker-class", "sync", \
+     "--max-requests", "1000", \
+     "--timeout", "30", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "config.wsgi:application"]

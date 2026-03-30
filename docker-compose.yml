@@ -1,0 +1,126 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: deep-vision-postgres
+    environment:
+      POSTGRES_DB: deep_vision
+      POSTGRES_USER: deepvision_user
+      POSTGRES_PASSWORD: deepvision_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - deep-vision-network
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: deep-vision-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - deep-vision-network
+
+  # Django Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: deep-vision-backend
+    command: python manage.py runserver 0.0.0.0:8000
+    environment:
+      - DEBUG=True
+      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=test-secret-key-local
+      - DATABASE_URL=postgres://deepvision_user:deepvision_password@postgres:5432/deep_vision
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - NODE_SERVICE_URL=http://realtime:4000
+    volumes:
+      - ./:/app
+      - /app/__pycache__
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - deep-vision-network
+
+  # Celery Worker (for background tasks)
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    container_name: deep-vision-celery
+    command: celery -A config.celery_app worker --loglevel=info
+    environment:
+      - DEBUG=True
+      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=test-secret-key-local
+      - DATABASE_URL=postgres://deepvision_user:deepvision_password@postgres:5432/deep_vision
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - NODE_SERVICE_URL=http://realtime:4000
+    volumes:
+      - ./:/app
+      - /app/__pycache__
+      - media_volume:/app/media
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    networks:
+      - deep-vision-network
+
+  # Node.js Real-time Server
+  realtime:
+    build:
+      context: .
+      dockerfile: Dockerfile.realtime
+    container_name: deep-vision-realtime
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DJANGO_API_URL=http://backend:8000
+    volumes:
+      - ./deepvision-realtime:/app
+      - /app/node_modules
+    ports:
+      - "4000:4000"
+    networks:
+      - deep-vision-network
+
+  # React Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: deep-vision-dashboard
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_REALTIME_URL=http://localhost:4000
+    volumes:
+      - ./deepvision-dashboard:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - deep-vision-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  media_volume:
+    driver: local
+
+networks:
+  deep-vision-network:
+    driver: bridge

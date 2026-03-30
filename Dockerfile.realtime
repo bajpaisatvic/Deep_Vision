@@ -1,0 +1,29 @@
+# Deep Vision — Real-time Server Dockerfile (Node.js)
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY deepvision-realtime/package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy application code
+COPY deepvision-realtime/ .
+
+# Use the built-in node user from alpine image
+RUN chown -R node:node /app
+
+USER node
+
+# Expose port
+EXPOSE 4000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:4000', (r) => {if (r.statusCode !== 404) throw new Error(r.statusCode)})" || exit 1
+
+# Start server
+CMD ["node", "server.js"]

@@ -1,0 +1,46 @@
+# Deep Vision — Celery Worker Dockerfile
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies (same as backend)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1 \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 deepvision && \
+    chown -R deepvision:deepvision /app
+
+# Copy requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY --chown=deepvision:deepvision . .
+
+# Set environment for headless OpenCV operation
+ENV QT_QPA_PLATFORM=offscreen
+
+USER deepvision
+
+# Expose port (for Celery events monitoring)
+EXPOSE 5555
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD celery -A config.celery_app inspect ping || exit 1
+
+# Run Celery worker
+CMD ["celery", "-A", "config.celery_app", "worker", \
+     "--loglevel=info", \
+     "--concurrency=4", \
+     "--time-limit=300", \
+     "--soft-time-limit=280"]

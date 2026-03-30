@@ -1,0 +1,48 @@
+# Deep Vision — React Dashboard Dockerfile
+# Multi-stage build: build stage + nginx serving stage
+
+# ─── Stage 1: Build ────────────────────────────────────────
+FROM node:18-alpine as builder
+
+WORKDIR /build
+
+# Copy package files
+COPY deepvision-dashboard/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy source code
+COPY deepvision-dashboard/ .
+
+# Build for production
+RUN npm run build
+
+# ─── Stage 2: Serve with Nginx ────────────────────────────
+FROM nginx:alpine
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Create non-root user
+RUN addgroup -g 1000 nginx && \
+    adduser -S nginx -u 1000 || true
+
+# Copy built app from builder
+COPY --from=builder /build/dist /usr/share/nginx/html
+
+# Change ownership
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx && \
+    chmod -R 755 /usr/share/nginx/html
+
+USER nginx
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
