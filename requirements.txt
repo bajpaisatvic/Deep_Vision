@@ -23,6 +23,7 @@ Pillow>=10.2,<11.0
 
 # Environment & Config
 python-decouple>=3.8,<4.0
+setuptools>=68.0,<75.0
 
 # MFA / OTP
 django-otp>=1.4,<2.0

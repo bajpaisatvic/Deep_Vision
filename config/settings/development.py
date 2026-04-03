@@ -9,9 +9,9 @@ DEBUG = True
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='Deep_Vision'),
+        'NAME': config('DB_NAME', default='deep_vision'),
         'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default='Sb@12345'),
+        'PASSWORD': config('DB_PASSWORD', default='Nikita@123456789'),
         'HOST': config('DB_HOST', default='localhost'),
         'PORT': config('DB_PORT', default='5432'),
     }
