@@ -1,261 +1,150 @@
-# Deep Vision — AI-Powered Missing Person Detection
+# 🔍 Deep Vision — AI-Powered Missing Person Detection System
 
-> Final Year Project — Real-time CCTV surveillance with facial recognition for identifying missing persons.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-4.x-092E20?style=flat-square&logo=django&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-5-37814A?style=flat-square&logo=celery&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=flat-square&logo=opencv&logoColor=white)
 
-## 🏗️ Architecture
-
-```
-┌──────────────┐     REST API      ┌──────────────┐    Socket.IO     ┌───────────────┐
-│   React UI   │ ◄────────────────► │ Django API   │ ──────────────► │  Node.js RT   │
-│   (Vite)     │     :3000          │ (DRF + CV)   │   Push alerts   │  (Express)    │
-│              │ ◄──── MJPEG ────── │    :8000      │                 │    :4000      │
-└──────────────┘                    └──────┬───────┘                 └───────────────┘
-                                          │
-                                    ┌─────▼──────┐
-                                    │  Celery     │
-                                    │  Worker     │
-                                    │  (Redis)    │
-                                    └─────┬──────┘
-                                          │
-                                   ┌──────▼──────┐
-                                   │ PostgreSQL   │
-                                   └─────────────┘
-```
-
-## 📋 Prerequisites
-
-| Tool | Version | Install Guide |
-|------|---------|---------------|
-| Python | 3.11+ | [python.org](https://python.org) |
-| Node.js | 18+ | [nodejs.org](https://nodejs.org) |
-| PostgreSQL | 14+ | [postgresql.org](https://postgresql.org) |
-| Docker Desktop | Latest | [docker.com](https://www.docker.com/products/docker-desktop/) — for running Redis |
-| CMake | Latest | `pip install cmake` (needed for dlib/face_recognition) |
-| Visual Studio Build Tools | Latest | [VS Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) — select "Desktop C++" workload |
-
-> **⚠️ Important for Windows:** `face_recognition` requires `dlib` which needs C++ build tools and CMake. Install Visual Studio Build Tools with the "Desktop development with C++" workload BEFORE running `pip install`.
+> Real-time face recognition across live CCTV streams using a distributed, 3-service architecture. Built to scale CV-heavy workloads without blocking the API layer.
 
 ---
 
-## 🚀 Setup Guide
+## 🏗️ Architecture Overview
 
-### Step 1: Clone & Navigate
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER                             │
+│              React Dashboard  ←→  Socket.IO (real-time alerts)  │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │ REST API / WebSocket
+┌───────────────────────────▼─────────────────────────────────────┐
+│                  SERVICE 1: Django API Server                    │
+│  • JWT Auth (access + refresh rotation)                          │
+│  • 15+ REST endpoints across 6 Django apps                       │
+│  • MJPEG camera stream ingestion                                 │
+│  • Role-based access: Citizen / Police / Admin                   │
+│  • Case lifecycle management                                     │
+└──────────┬────────────────────────────────────────┬─────────────┘
+           │ Enqueue frames via Redis                │
+┌──────────▼─────────────┐              ┌────────────▼────────────┐
+│  SERVICE 2: Celery      │              │  SERVICE 3: Node.js     │
+│  Worker Pool (async)    │              │  Socket.IO Server       │
+│                         │              │                         │
+│  • Batch frames (20s)   │              │  • Real-time alert      │
+│  • dlib 128-d face      │              │    push to officers     │
+│    embedding extraction │              │  • Sub-second delivery  │
+│  • Configurable match   │◄─ alerts ───►│  • Room-based channels  │
+│    distance threshold   │              │    per police station   │
+│  • Emit match events    │              │                         │
+└─────────────────────────┘              └─────────────────────────┘
+           │
+┌──────────▼─────────────┐
+│      PostgreSQL         │
+│  • Missing persons DB   │
+│  • Face embedding store │
+│  • Case + alert logs    │
+└─────────────────────────┘
+```
+
+**Why 3 services?** Face recognition via dlib is CPU-intensive. Running it synchronously would block the Django request cycle under concurrent CCTV loads. The Celery worker pool decouples compute from the API, while the Node.js Socket.IO service handles real-time push without long-polling overhead on Django.
+
+---
+
+## ✨ Key Features
+
+| Feature | Details |
+|---|---|
+| **Real-time face matching** | dlib 128-dimensional embeddings with configurable distance thresholds |
+| **Async pipeline** | Frames batched every 20s → Redis queue → Celery workers (no API blocking) |
+| **Live CCTV streaming** | Full MJPEG camera stream ingestion and processing |
+| **Sub-second alerts** | Socket.IO push to police officers the moment a match is confirmed |
+| **Role-based multi-tenancy** | Citizen / Police / Admin with JWT refresh-token rotation |
+| **Case management** | Full case lifecycle: register → investigate → resolve |
+| **Alert verification** | Officers confirm/reject matches before escalation |
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **API Server** | Django 4, Django REST Framework |
+| **CV Engine** | OpenCV 4, dlib (128-d face embeddings) |
+| **Async Workers** | Celery 5 + Redis (task queue & frame store) |
+| **Real-time** | Node.js + Socket.IO |
+| **Frontend** | React 18 |
+| **Database** | PostgreSQL 15 |
+| **Auth** | JWT with refresh-token rotation |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- PostgreSQL 15+
+- Redis 7+
+- `cmake` (required for dlib compilation)
+
+### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/bajpaisatvic/Deep_Vision.git
 cd Deep_Vision
 ```
 
-### Step 2: Redis via Docker
-
-Start Redis using Docker (keep this running throughout development):
+### 2. Set up the Django API server
 
 ```bash
-docker run -d --name deep-vision-redis -p 6379:6379 redis:7-alpine
-```
-
-To check if Redis is running:
-
-```bash
-docker ps
-```
-
-> **Note:** After restarting your PC, start Redis again with: `docker start deep-vision-redis`
-
-### Step 3: PostgreSQL Database
-
-Open pgAdmin or psql and run:
-
-```sql
-CREATE DATABASE deep_vision;
-CREATE USER deepvision_user WITH PASSWORD 'your_password';
-ALTER ROLE deepvision_user SET client_encoding TO 'utf8';
-GRANT ALL PRIVILEGES ON DATABASE deep_vision TO deepvision_user;
-```
-
-### Step 4: Environment File
-
-Copy `.env.example` to `.env` and update values:
-
-```bash
-copy .env.example .env
-```
-
-Edit `.env`:
-
-```env
-# Django
-SECRET_KEY=generate-a-random-secret-key
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Database — update user/pass to match Step 2
-DATABASE_URL=postgres://deepvision_user:your_password@localhost:5432/deep_vision
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/0
-
-# Node.js Real-time
-NODE_SERVICE_URL=http://localhost:4000
-
-# Vision Pipeline
-FACE_MATCH_THRESHOLD=0.6
-CCTV_FRAME_RATE=1
-```
-
-### Step 5: Python Virtual Environment
-
-```bash
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Mac/Linux
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-pip install cmake
-pip install dlib
+# Install dependencies
 pip install -r requirements.txt
-```
 
-> If `dlib` fails, ensure Visual Studio Build Tools with C++ workload is installed, then retry.
+# Configure environment variables
+cp .env.example .env
+# Edit .env: DATABASE_URL, REDIS_URL, SECRET_KEY, JWT_SECRET
 
-### Step 6: Database Migrations
-
-```bash
+# Run migrations
 python manage.py migrate
+
+# Create superuser
+python manage.py createsuperuser
+
+# Start Django server
+python manage.py runserver
 ```
 
-### Step 7: Create Superuser
+### 3. Start Celery workers
 
 ```bash
-python manage.py createsuperuser
+# In a new terminal (venv activated)
+celery -A config worker --loglevel=info --concurrency=4
 ```
 
-Use role `ADMIN` when prompted (or update via Django admin later).
-
-### Step 8: Node.js Real-time Server
+### 4. Start the Node.js Socket.IO server
 
 ```bash
 cd deepvision-realtime
 npm install
-cd ..
+node index.js
 ```
 
-### Step 9: React Dashboard
+### 5. Start the React dashboard
 
 ```bash
 cd deepvision-dashboard
 npm install
-cd ..
-```
-
----
-
-## ▶️ Running the Project
-
-You need **5 terminals** running simultaneously:
-
-### Terminal 0 — Redis (Docker)
-
-Make sure Redis is running:
-
-```bash
-docker start deep-vision-redis
-```
-
-### Terminal 1 — Django API Server
-
-```bash
-cd Deep_Vision
-venv\Scripts\activate
-python manage.py runserver
-```
-→ Runs on `http://127.0.0.1:8000`
-
-### Terminal 2 — Celery Worker
-
-```bash
-cd Deep_Vision
-venv\Scripts\activate
-celery -A config worker --loglevel=info --pool=solo
-```
-→ `--pool=solo` is required on Windows
-
-### Terminal 3 — Node.js Real-time Server
-
-```bash
-cd Deep_Vision\deepvision-realtime
-node server.js
-```
-→ Runs on `http://localhost:4000`
-
-### Terminal 4 — React Dashboard
-
-```bash
-cd Deep_Vision\deepvision-dashboard
 npm run dev
 ```
-→ Runs on `http://localhost:3000` (or whichever port Vite assigns)
-
----
-
-## 🧪 Testing the Full Flow
-
-### 1. Create Users
-
-Via API or Django admin (`http://127.0.0.1:8000/admin/`):
-
-| Username | Role | Purpose |
-|----------|------|---------|
-| citizen1 | CITIZEN | Reports missing person |
-| officer1 | POLICE | Monitors alerts |
-| admin1 | ADMIN | Full access |
-
-### 2. Report a Missing Person
-
-1. Login as `citizen1` on the React dashboard
-2. Go to **Report Missing** → fill name, age, gender, description
-3. Upload a **clear face photo** (frontal, well-lit, one person)
-4. Submit → case is created
-
-### 3. Verify Embedding Generated
-
-Check the Celery terminal — you should see:
-
-```
-✅ Embedding generated for MissingPersonImage #1 (128-d vector).
-```
-
-If you see `⚠️ No face detected`, the photo quality is poor — re-upload.
-
-### 4. Start Live Monitoring
-
-1. Login as `officer1` or `admin1`
-2. Go to **Live Monitor** in sidebar
-3. Click **Start** on the webcam feed
-4. Show the same face (from the uploaded photo) to the webcam
-
-### 5. Wait for Detection
-
-- Background thread captures frames every 3 seconds
-- Every 20 seconds, sends a batch to Celery for matching
-- Watch the Celery terminal for match logs:
-
-```
-🔍 Matching against 1 stored embedding(s), threshold=0.60
-📏 Case #1, Image #1 — distance: 0.42 — ✅ MATCH
-🚨 Alert #1 — Person #1 on Webcam — Confidence: 58.0%
-```
-
-### 6. Alert Notification
-
-- A **toast notification** appears on the dashboard
-- Go to **Alerts** → see the new alert with snapshot
-- Click to see full details with confidence score
-
-### 7. Verify Alert
-
-- Click **Verify Match** → case status changes to FOUND
-- That person's embeddings are excluded from future searches
 
 ---
 
@@ -263,55 +152,50 @@ If you see `⚠️ No face detected`, the photo quality is poor — re-upload.
 
 ```
 Deep_Vision/
-├── accounts/          # User auth, JWT, roles (CITIZEN/POLICE/ADMIN)
-├── alerts/            # Detection alerts, notifications, verification
-├── cameras/           # CCTV camera management, MJPEG streaming
-├── cases/             # Missing person cases, image uploads
-├── config/            # Django settings, URLs, Celery config
-├── vision/            # Face recognition pipeline, Celery tasks
-├── media/             # Uploaded images, captured frames, snapshots
-├── deepvision-dashboard/   # React frontend (Vite)
-├── deepvision-realtime/    # Node.js Socket.IO server
-├── requirements.txt
-├── .env
-└── manage.py
+├── accounts/          # User auth: JWT, role management (Citizen/Police/Admin)
+├── alerts/            # Alert creation, verification, and escalation logic
+├── cameras/           # CCTV feed ingestion, MJPEG stream handling
+├── cases/             # Missing person case lifecycle management
+├── config/            # Django settings, Celery config, URL routing
+├── deepvision-dashboard/  # React frontend
+├── deepvision-realtime/   # Node.js + Socket.IO real-time alert server
+└── requirements.txt
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## ⚙️ How the Face Recognition Pipeline Works
 
-| Problem | Solution |
-|---------|----------|
-| `dlib` won't install | Install Visual Studio Build Tools with C++ workload + CMake |
-| `celery` command not found | Use `venv\Scripts\celery` or activate venv first |
-| Celery `PermissionError` on Windows | Use `--pool=solo` flag |
-| No face detected in uploaded photo | Use a clear, frontal face photo with good lighting |
-| Threshold too strict (no matches) | Lower `FACE_MATCH_THRESHOLD` in `.env` (try 0.55–0.65) |
-| Webcam `camera_id=0` error | Run migration: `python manage.py migrate` |
-| CORS errors from React | Ensure `127.0.0.1:3000` is in `CORS_ALLOWED_ORIGINS` |
-| Node.js connection refused | Make sure Node server is running on port 4000 |
+```
+1. Camera feed → Django ingests MJPEG frames
+2. Frames queued to Redis every 20 seconds (batching reduces redundant processing)
+3. Celery worker dequeues batch → runs dlib face detection → extracts 128-d embeddings
+4. Embedding compared against missing persons DB using configurable distance threshold
+5. On match → alert event emitted to Node.js Socket.IO server
+6. Socket.IO pushes alert to the assigned police station room in < 1 second
+7. Officer receives alert with face match confidence, camera location, timestamp
+8. Officer verifies or rejects the match → case status updated in PostgreSQL
+```
 
 ---
 
-## 🔑 API Endpoints Quick Reference
+## 🔒 Security
 
-| Method | Endpoint | Auth | Purpose |
-|--------|----------|------|---------|
-| POST | `/api/auth/register/` | No | Register user |
-| POST | `/api/auth/login/` | No | Login → get JWT |
-| POST | `/api/auth/token/refresh/` | No | Refresh JWT |
-| GET | `/api/cases/` | JWT | List cases |
-| POST | `/api/cases/` | JWT | Create case |
-| GET | `/api/cases/<id>/` | JWT | Case detail |
-| POST | `/api/cases/<id>/images/` | JWT | Upload face image |
-| PATCH | `/api/cases/<id>/status/` | JWT (Police/Admin) | Update status |
-| GET | `/api/alerts/` | JWT (Police/Admin) | List alerts |
-| GET | `/api/alerts/<id>/` | JWT (Police/Admin) | Alert detail |
-| PATCH | `/api/alerts/<id>/verify/` | JWT (Police/Admin) | Verify/dismiss |
-| GET | `/api/cameras/` | JWT | List cameras |
-| GET | `/api/cameras/<id>/stream/` | No | MJPEG stream |
-| POST | `/api/cameras/<id>/stop/` | No | Stop stream |
-| POST | `/api/cameras/simulate/` | JWT | One-shot detection |
-| GET | `/api/notifications/` | JWT | Officer notifications |
-| GET | `/api/health/` | No | Health check |
+- JWT access + refresh token rotation (tokens invalidated on refresh)
+- Role-based route guards — Citizens cannot access police/admin endpoints
+- Face embeddings stored as float arrays, never as raw images in the alert log
+- Camera credentials stored in environment variables, never hardcoded
+
+---
+
+## 📊 API Overview
+
+| Module | Endpoints | Description |
+|---|---|---|
+| Auth | `POST /api/auth/register`, `/login`, `/refresh` | JWT-based auth |
+| Cases | `GET/POST /api/cases/`, `PATCH /api/cases/:id/` | Missing person case CRUD |
+| Cameras | `GET /api/cameras/`, `POST /api/cameras/stream/` | Camera registration & streaming |
+| Alerts | `GET /api/alerts/`, `PATCH /api/alerts/:id/verify/` | Alert retrieval & verification |
+| Admin | `/api/admin/users/`, `/api/admin/stats/` | System stats, user management |
+
+---
