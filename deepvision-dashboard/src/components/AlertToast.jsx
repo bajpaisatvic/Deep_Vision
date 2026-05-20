@@ -10,7 +10,10 @@ export default function AlertToast() {
   useEffect(() => {
     let socket
     import('socket.io-client').then(({ io }) => {
-      socket = io('http://localhost:4000', {
+      // VITE_REALTIME_URL is empty in Docker builds (Nginx proxies /socket.io)
+      // and http://localhost:4000 in local dev (set in .env.development)
+      const realtimeUrl = import.meta.env.VITE_REALTIME_URL || undefined
+      socket = io(realtimeUrl, {
         transports: ['websocket', 'polling'],
         reconnection: true,
       })

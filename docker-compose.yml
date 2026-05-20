@@ -1,0 +1,98 @@
+services:
+
+  # ── PostgreSQL with pgvector extension ─────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: ${DB_NAME:-deep_vision}
+      POSTGRES_USER: ${DB_USER:-deepvision_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-deepvision_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-deepvision_user} -d ${DB_NAME:-deep_vision}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis (Celery broker + result backend) ──────────────────────────
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Django REST API ─────────────────────────────────────────────────
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"
+    env_file: .env.docker
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      NODE_SERVICE_URL: http://realtime:4000
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Celery Worker (face-recognition pipeline) ───────────────────────
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A config worker --loglevel=info --pool=solo
+    env_file: .env.docker
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      NODE_SERVICE_URL: http://realtime:4000
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Node.js real-time server (Socket.IO alerts) ─────────────────────
+  realtime:
+    build:
+      context: ./deepvision-realtime
+      dockerfile: Dockerfile
+    environment:
+      PORT: 4000
+      # Accept connections from the Nginx frontend container
+      CORS_ORIGINS: "http://localhost,http://127.0.0.1"
+
+  # ── React frontend served by Nginx (proxies everything) ────────────
+  frontend:
+    build:
+      context: ./deepvision-dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - django
+      - realtime
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:
+  static_data:

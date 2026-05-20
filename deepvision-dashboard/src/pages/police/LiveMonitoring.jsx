@@ -77,7 +77,7 @@ export default function LiveMonitoring() {
     }
   }
 
-  const STREAM_BASE = 'http://127.0.0.1:8000/api/cameras'
+  const STREAM_BASE = '/api/cameras'
 
   const renderFeedCard = (id, name, location, zone) => {
     const isActive = activeFeeds[id]
